@@ -10,9 +10,11 @@
 
   + What happens to IR after DAG creation ?
 * Optimize by Combine DAG
+    https://github.com/mahatt/llvm-project/blob/879d70f1686dd936a22bd08592d91a70f9504059/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp#L2006-L2027
 * Legalize
   + Types
   + Operations
+  + https://github.com/mahatt/llvm-project/blob/879d70f1686dd936a22bd08592d91a70f9504059/llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp#L5926-L5936
 ## Machine IR
 ## MC Inst
 
