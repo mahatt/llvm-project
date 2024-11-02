@@ -1,3 +1,9 @@
+# What is Frame Index
+* LLVM Codegeneration framework has concept of virtual frame throughout code generation
+* Frame stores stack elements in function, numbered with indices
+* Prologue allocates stack frame and Target uses virtual frame with target specific frame.
+  Each Index is replaced by satck start + offset.
+  https://github.com/mahatt/llvm-project/blob/bd0c5e4d04efcf1698a20b59df30563b65016d1e/llvm/lib/Target/X86/X86RegisterInfo.cpp#L890-L930
 
 ## Prologue 
 * setup  stack frame
