@@ -1,3 +1,4 @@
+
 # What is Frame Index
 * LLVM Codegeneration framework has concept of virtual frame throughout code generation
 * Frame stores stack elements in function, numbered with indices
@@ -17,3 +18,18 @@
   + EHPersonality
 ## Epilogue
 * cleans up the stack frame prior to function return
+
+# Inserting Prologu Epilog
+* Code Driver
+  https://github.com/mahatt/llvm-project/blob/48fa1e8fd095d8cd4615d88d6b3f143f80b6aeb4/llvm/lib/CodeGen/PrologEpilogInserter.cpp#L219-L240
+  1. Calculate frame size
+  2. Decide Basic Block where to add extra code for frame spill and restore
+  3. Adjust DebugInfo for right stepping
+  4. Spill Callee saved Reg in current function if needed
+  5. Before Finalizing Frame , consult Target for final modification
+  6. Calculate Real Offsets from Frame Indices
+  7. If func is not Naked, emit Prolog Epilog
+  8. Before Finalizing Offsets from Indices, consult target
+  9. Replace Frame Indices possibly with direction forward and backward
+  10. Check MAchineFrameInfo for result, conclude stack size and max stack size allowed.
+      
