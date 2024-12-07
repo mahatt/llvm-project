@@ -24,11 +24,21 @@
     - Target Intrinsic
     - Function Calls
        + Lowering Arguments
-         https://github.com/mahatt/llvm-project/blob/2c3684128e0b82c3bc7b67bc535a04c76571f0a6/llvm/lib/Target/X86/GISel/X86CallLowering.cpp#L260
+         https://github.com/mahatt/llvm-project/blob/2c3684128e0b82c3bc7b67bc535a04c76571f0a6/llvm/lib/Target/X86/GISel/X86CallLowering.cpp#L260-L280
        + Lowering Return
-         https://github.com/mahatt/llvm-project/blob/2c3684128e0b82c3bc7b67bc535a04c76571f0a6/llvm/lib/Target/X86/GISel/X86CallLowering.cpp#L144
+         https://github.com/mahatt/llvm-project/blob/2c3684128e0b82c3bc7b67bc535a04c76571f0a6/llvm/lib/Target/X86/GISel/X86CallLowering.cpp#L144-L160
+         
        + Lower Call
          https://github.com/mahatt/llvm-project/blob/2c3684128e0b82c3bc7b67bc535a04c76571f0a6/llvm/lib/Target/X86/GISel/X86CallLowering.cpp#L319
+ 
+         * Passing Parameter
+          - https://github.com/mahatt/llvm-project/blob/2bfa54fb93841124defba524fef590d393265ba4/llvm/include/llvm/CodeGen/GlobalISel/CallLowering.h#L329-L335
+          - Assign Value to register, Register becomes live in Machine Basic block
+          - https://github.com/mahatt/llvm-project/blob/2bfa54fb93841124defba524fef590d393265ba4/llvm/include/llvm/CodeGen/GlobalISel/CallLowering.h#L341-L348
+          - https://github.com/mahatt/llvm-project/blob/2bfa54fb93841124defba524fef590d393265ba4/llvm/lib/Target/X86/GISel/X86CallLowering.cpp#L93-L120
+          * Returning Parameter
+            https://github.com/mahatt/llvm-project/blob/2bfa54fb93841124defba524fef590d393265ba4/llvm/include/llvm/CodeGen/GlobalISel/CallLowering.h#L345-L349
+         
     - Aggregates
     - Constants
 * Generic MIR -> Legalized MIR
