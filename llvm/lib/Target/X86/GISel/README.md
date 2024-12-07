@@ -41,8 +41,25 @@
          
     - Aggregates
     - Constants
-* Generic MIR -> Legalized MIR
+* [Generic MIR -> Legalized MIR](https://llvm.org/docs/GlobalISel/Legalizer.html)
   + Legalize all operation, beyond this there should be no illegal operation
+  + LLVM IR with unsupported types and Operation -> gMIR -> Legal gMIR
+  + Legality depends on Instruction itself and not on "Context"
+  + Legal Instruction if Target ISEL Pattern matches, "selectable" and vregs that can be loaded and stored.
+  + Legalization is iterative and stateful in GMIR. It can introduce special instructions like G_MERGE_VALUES, G_UNMERGE_VALUES and G_EXTRACT. These are expected to combine at end of legalizer, if not they are selectable.
+  + LegalityQuery
+    - Build `LegalizeRuleSet` using  `getActionDefinitionsBuilder`
+    - https://github.com/mahatt/llvm-project/blob/75d368527d394b5a8894742ee89a6704cef62911/llvm/lib/Target/X86/GISel/X86LegalizerInfo.cpp#L137-L165
+    - Working 
+        + `getActionDefinitionsBuilder' builds rule-set for opcode or list of opcodes, bound permanently
+        + Rules execute top to bottom, if as result of rule instruction gets legalized, then executes again from top. If does not satify any rule, it is not supported.
+        + Declare Legal instruction as top level rule to avoid expensive checks.
+        + Rules Action
+          + `LegalIf()` `LegalFor()`
+        + Rule Predicate
+          + `legal()`, `lower()`
+         
+    - Legality of vectors, pointers, Operations
 * Map Operands of MIR to Register Banks
   + All Virtual register must have register *bank*, No virtual reg should be unassigned.
 * Replace Generic MIR with Real MIR by Pattern Matching
