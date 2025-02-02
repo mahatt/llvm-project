@@ -43,11 +43,14 @@
               
         -  ProcResourceUnits - Number of Units of a Kind
         -  ProcResource - Resource of A Type with Number of units each
-        -  ProcResGroup - List of Resources with each Resource may be same or different TYPE
+        -  ProcResGroup - List of Resources with each Resource may be same or different TYPE, Uop can go to ONE of Group.
           https://github.com/mahatt/llvm-project/blob/7dc4d08b8cc47314923b35fcbae587589bd2ebdf/llvm/include/llvm/Target/TargetSchedule.td#L187-L205
           https://github.com/mahatt/llvm-project/blob/7dc4d08b8cc47314923b35fcbae587589bd2ebdf/llvm/lib/Target/X86/X86SchedSapphireRapids.td#L35
           https://github.com/mahatt/llvm-project/blob/7dc4d08b8cc47314923b35fcbae587589bd2ebdf/llvm/lib/Target/X86/X86SchedSapphireRapids.td#L52
-              
+        - STALL - When  uop can not be allocated to any ProcResGroup in runtime.
+        - To avoid stall we need reorder same uops, resulting dispatch hazards. It requires Queue at Reservation Station
+          RS preemptively issue instructions with no dependencies on the others, in the hope of hiding latencies.
+         
   + Machine Combiner for target specific optimizaiton
   
 
