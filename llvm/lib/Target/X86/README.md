@@ -50,7 +50,12 @@
         - STALL - When  uop can not be allocated to any ProcResGroup in runtime.
         - To avoid stall we need reorder same uops, resulting dispatch hazards. It requires Queue at Reservation Station
           RS preemptively issue instructions with no dependencies on the others, in the hope of hiding latencies.
-         
+        - THROUGHPUT - Reciprocal of number of ProcResources
+        - SPLIT
+        - SHARE
+        - REPLICATE
+  + Machine Scheduler
+  + Machine Code Analyzer
   + Machine Combiner for target specific optimizaiton
   
 
