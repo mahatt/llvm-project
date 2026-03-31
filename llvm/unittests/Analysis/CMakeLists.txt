@@ -5,6 +5,7 @@ set(LLVM_LINK_COMPONENTS
   Core
   Instrumentation
   Passes
+  Plugins
   Support
   TargetParser
   TransformUtils
@@ -27,12 +28,15 @@ set(ANALYSIS_TEST_SOURCES
   DDGTest.cpp
   DomTreeUpdaterTest.cpp
   DXILResourceTest.cpp
+  EphemeralValuesCacheTest.cpp
   GraphWriterTest.cpp
   GlobalsModRefTest.cpp
   FunctionPropertiesAnalysisTest.cpp
   InlineCostTest.cpp
+  IR2VecTest.cpp
   IRSimilarityIdentifierTest.cpp
   IVDescriptorsTest.cpp
+  LastRunTrackingAnalysisTest.cpp
   LazyCallGraphTest.cpp
   LoadsTest.cpp
   LoopInfoTest.cpp
@@ -67,6 +71,8 @@ endif()
 
 add_llvm_unittest_with_input_files(AnalysisTests
   ${ANALYSIS_TEST_SOURCES}
+
+  EXPORT_SYMBOLS
   )
 
 add_dependencies(AnalysisTests intrinsics_gen)
@@ -77,11 +83,6 @@ target_link_libraries(AnalysisTests PRIVATE LLVMTestingSupport)
 # objects to be properly bound.
 if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-brtl")
-endif()
-
-# Export symbols from the plugins shared objects.
-if(NOT WIN32)
-  export_executable_symbols_for_plugins(AnalysisTests)
 endif()
 
 add_subdirectory(InlineAdvisorPlugin)

@@ -13,7 +13,6 @@
 #include "gtest/gtest.h"
 
 using namespace llvm;
-using ::testing::HasSubstr;
 
 // Compile-time tests templates in the detail namespace.
 namespace {
@@ -150,7 +149,7 @@ TEST(FormatVariadicTest, ValidReplacementSequence) {
   EXPECT_EQ(0u, Replacements[0].Index);
   EXPECT_EQ(3u, Replacements[0].Width);
   EXPECT_EQ(AlignStyle::Left, Replacements[0].Where);
-  EXPECT_EQ("foo", Replacements[0].Options);
+  EXPECT_EQ(" foo ", Replacements[0].Options);
 
   // 8. Everything after the first option specifier is part of the style, even
   // if it contains another option specifier.
@@ -269,12 +268,57 @@ TEST(FormatVariadicTest, MultipleReplacements) {
   EXPECT_EQ(ReplacementType::Literal, Replacements[3].Type);
   EXPECT_EQ("-", Replacements[3].Spec);
 
-  // {2:bar,-3} - Options=bar, Align=-3
+  // {2,-3:bar} - Options=bar, Align=-3
   EXPECT_EQ(ReplacementType::Format, Replacements[4].Type);
   EXPECT_EQ(2u, Replacements[4].Index);
   EXPECT_EQ(3u, Replacements[4].Width);
   EXPECT_EQ(AlignStyle::Left, Replacements[4].Where);
   EXPECT_EQ("bar", Replacements[4].Options);
+}
+
+TEST(FormatVariadicTest, AutomaticIndices) {
+  auto Replacements = parseFormatString("{}");
+  ASSERT_EQ(1u, Replacements.size());
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+
+  Replacements = parseFormatString("{}bar{}");
+  ASSERT_EQ(3u, Replacements.size());
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(ReplacementType::Literal, Replacements[1].Type);
+  EXPECT_EQ("bar", Replacements[1].Spec);
+  EXPECT_EQ(ReplacementType::Format, Replacements[2].Type);
+  EXPECT_EQ(1u, Replacements[2].Index);
+
+  Replacements = parseFormatString("{}{}");
+  ASSERT_EQ(2u, Replacements.size());
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(ReplacementType::Format, Replacements[1].Type);
+  EXPECT_EQ(1u, Replacements[1].Index);
+
+  Replacements = parseFormatString("{}{:foo}{,-3:bar}");
+  ASSERT_EQ(3u, Replacements.size());
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(0u, Replacements[0].Width);
+  EXPECT_EQ(AlignStyle::Right, Replacements[0].Where);
+  EXPECT_EQ("", Replacements[0].Options);
+
+  // {:foo} - Options=foo
+  EXPECT_EQ(ReplacementType::Format, Replacements[1].Type);
+  EXPECT_EQ(1u, Replacements[1].Index);
+  EXPECT_EQ(0u, Replacements[1].Width);
+  EXPECT_EQ(AlignStyle::Right, Replacements[1].Where);
+  EXPECT_EQ("foo", Replacements[1].Options);
+
+  // {,-3:bar} - Options=bar, Align=-3
+  EXPECT_EQ(ReplacementType::Format, Replacements[2].Type);
+  EXPECT_EQ(2u, Replacements[2].Index);
+  EXPECT_EQ(3u, Replacements[2].Width);
+  EXPECT_EQ(AlignStyle::Left, Replacements[2].Where);
+  EXPECT_EQ("bar", Replacements[2].Options);
 }
 
 TEST(FormatVariadicTest, FormatNoReplacements) {
@@ -289,6 +333,12 @@ TEST(FormatVariadicTest, FormatBasicTypesOneReplacement) {
   EXPECT_EQ("Test", formatv("{0}", "Test").str());
   EXPECT_EQ("Test2", formatv("{0}", StringRef("Test2")).str());
   EXPECT_EQ("Test3", formatv("{0}", std::string("Test3")).str());
+}
+
+TEST(FormatVariadicTest, FormatAutomaticIndices) {
+  EXPECT_EQ("1", formatv("{}", 1).str());
+  EXPECT_EQ("c1", formatv("{}{}", 'c', 1).str());
+  EXPECT_EQ("c-1rrr-0xFF", formatv("{}-{,r-4}-{:X}", 'c', 1, 255).str());
 }
 
 TEST(FormatVariadicTest, IntegralHexFormatting) {
@@ -340,6 +390,75 @@ TEST(FormatVariadicTest, IntegralHexFormatting) {
   EXPECT_EQ(" 000255", formatv("{0,7:6}", 255).str());
 }
 
+template <typename FormatTy>
+static std::string printToString(FormatTy &&Fmt, unsigned MaxN = 100) {
+  std::vector<char> Dst(MaxN + 2);
+  int N = Fmt.snprint(Dst.data(), Dst.size());
+  Dst.back() = 0;
+  return N < 0 ? "" : Dst.data();
+}
+
+TEST(FormatAndFormatvTest, EquivalentHexFormatting) {
+  uint8_t HexDigits = 10;
+  uint64_t N = 255;
+
+  // Here's the old format() way of printing a hex number with
+  // dynamic width and precision, both being the same.
+  EXPECT_EQ("0x00000000ff",
+            printToString(format("0x%*.*" PRIx64, HexDigits, HexDigits, N)));
+
+  // Now, do the same with formatv()
+  EXPECT_EQ("0x00000000ff",
+            formatv("0x{0:x-}", fmt_align(N, AlignStyle::Right, HexDigits, '0'))
+                .str());
+
+  EXPECT_EQ("0x000000fe", printToString(format("0x%8.8" PRIx64, 0xfeULL)));
+  EXPECT_EQ("0x000000fe", formatv("{0:x+8}", 0xfeULL).str());
+}
+
+TEST(FormatAndFormatvTest, NonNegativePlusInteger) {
+  EXPECT_EQ("-255", printToString(format("%+d", -255)));
+  EXPECT_EQ("+255", printToString(format("%+d", 255)));
+  EXPECT_EQ("+0", printToString(format("%+d", 0)));
+  EXPECT_EQ("-7", printToString(format("%+d", -7)));
+
+  // Check that +d works for signed and unsigned integral values.
+  // Ensure the default is not changed (a + is not added without requesting it).
+  EXPECT_EQ("+1", formatv("{0:+d}", static_cast<unsigned int>(1)).str());
+  EXPECT_EQ("+2", formatv("{0:+d}", static_cast<int>(2)).str());
+  EXPECT_EQ("+3", formatv("{0:+d}", static_cast<unsigned long>(3)).str());
+  EXPECT_EQ("+4", formatv("{0:+d}", static_cast<long>(4)).str());
+  EXPECT_EQ("+5", formatv("{0:+d}", static_cast<unsigned long long>(5)).str());
+  EXPECT_EQ("+6", formatv("{0:+d}", static_cast<long long>(6)).str());
+  EXPECT_EQ("-7", formatv("{0:+d}", static_cast<int>(-7)).str());
+  EXPECT_EQ("-8", formatv("{0:+d}", static_cast<long>(-8)).str());
+  EXPECT_EQ("-9", formatv("{0:+d}", static_cast<long long>(-9)).str());
+
+  EXPECT_EQ("11", formatv("{0:d}", static_cast<unsigned int>(11)).str());
+  EXPECT_EQ("22", formatv("{0:d}", static_cast<int>(22)).str());
+  EXPECT_EQ("33", formatv("{0:d}", static_cast<unsigned long>(33)).str());
+  EXPECT_EQ("44", formatv("{0:d}", static_cast<long>(44)).str());
+  EXPECT_EQ("55", formatv("{0:d}", static_cast<unsigned long long>(55)).str());
+  EXPECT_EQ("66", formatv("{0:d}", static_cast<long long>(66)).str());
+  EXPECT_EQ("-77", formatv("{0:d}", static_cast<int>(-77)).str());
+  EXPECT_EQ("-88", formatv("{0:d}", static_cast<long>(-88)).str());
+  EXPECT_EQ("-99", formatv("{0:d}", static_cast<long long>(-99)).str());
+
+  // Ensure that 0 is also prefixed with + (old behaviour from format(), see
+  // above).
+  EXPECT_EQ("+0", formatv("{0:+d}", 0).str());
+  EXPECT_EQ("0", formatv("{0:d}", 0).str());
+
+  // Ensure that an empty or otherwise empty format string is also working as
+  // expected
+  EXPECT_EQ("+333", formatv("{0:+}", 333).str());
+  EXPECT_EQ("444", formatv("{0:}", 444).str());
+
+  // Try with width modifier as well, to ensure that the + is still present and
+  // that the width is correct.
+  EXPECT_EQ("  -1", formatv("{0,4:+d}", -1).str());
+  EXPECT_EQ("  +1", formatv("{0,4:+d}", 1).str());
+}
 TEST(FormatVariadicTest, PointerFormatting) {
   // 1. Trivial cases.  Hex is default.  Default Precision is pointer width.
   if (sizeof(void *) == 4) {
@@ -543,7 +662,6 @@ TEST(FormatVariadicTest, BigTest) {
   for (auto &Item : Ts) {
     Stream << std::apply(format_tuple(Line), Item) << "\n";
   }
-  Stream.flush();
   const char *Expected =
       R"foo(There are {14} items in the tuple, and {2} tuple(s) in the array.
   Char|  HexInt|   Str    |   Ref    |  std::str   | double|  float|   pointer|comma  |       exp|          bigint|          bigint2| limit|byte
@@ -717,6 +835,10 @@ TEST(FormatVariadicTest, Validate) {
   EXPECT_DEATH(formatv("{0}", 1, 2).str(), "Expected 1 Args, but got 2");
   EXPECT_DEATH(formatv("{0} {2}", 1, 2, 3).str(),
                "Replacement field indices cannot have holes");
+  EXPECT_DEATH(formatv("{}{1}", 0, 1).str(),
+               "Cannot mix automatic and explicit indices");
+  EXPECT_DEATH(formatv("{}{0}{}", 0, 1).str(),
+               "Cannot mix automatic and explicit indices");
 #else  // GTEST_HAS_DEATH_TEST
   GTEST_SKIP() << "No support for EXPECT_DEATH";
 #endif // GTEST_HAS_DEATH_TEST
@@ -724,6 +846,8 @@ TEST(FormatVariadicTest, Validate) {
   // If asserts are disabled, verify that validation is disabled.
   EXPECT_EQ(formatv("{0}", 1, 2).str(), "1");
   EXPECT_EQ(formatv("{0} {2}", 1, 2, 3).str(), "1 3");
+  EXPECT_EQ(formatv("{}{1}", 0, 1).str(), "01");
+  EXPECT_EQ(formatv("{}{0}{}", 0, 1).str(), "001");
 #endif // NDEBUG
 }
 

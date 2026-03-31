@@ -35,7 +35,7 @@ return:                                           ; preds = %if.end, %if.then
   ret i32 %2, !dbg !13
 }
 
-attributes #0 = { nounwind uwtable "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind uwtable "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "use-soft-float"="false" }
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!7, !8}
@@ -59,4 +59,4 @@ attributes #0 = { nounwind uwtable "less-precise-fpmad"="false" "frame-pointer"=
 
 ; CHECK: Address            Line   Column File   ISA Discriminator OpIndex Flags
 ; CHECK: ------------------ ------ ------ ------ --- ------------- ------- -------------
-; CHECK: 0x000000000000000a      2      0      1   0            42       0 is_stmt{{$}}
+; CHECK: 0x000000000000000a      2      0      1   0            42       0 {{$}}

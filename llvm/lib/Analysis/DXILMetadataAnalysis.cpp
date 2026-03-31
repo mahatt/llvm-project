@@ -24,10 +24,10 @@ using namespace dxil;
 
 static ModuleMetadataInfo collectMetadataInfo(Module &M) {
   ModuleMetadataInfo MMDAI;
-  Triple TT(Triple(M.getTargetTriple()));
+  const Triple &TT = M.getTargetTriple();
   MMDAI.DXILVersion = TT.getDXILVersion();
   MMDAI.ShaderModelVersion = TT.getOSVersion();
-  MMDAI.ShaderStage = TT.getEnvironment();
+  MMDAI.ShaderProfile = TT.getEnvironment();
   NamedMDNode *ValidatorVerNode = M.getNamedMetadata("dx.valver");
   if (ValidatorVerNode) {
     auto *ValVerMD = cast<MDNode>(ValidatorVerNode->getOperand(0));
@@ -42,7 +42,7 @@ static ModuleMetadataInfo collectMetadataInfo(Module &M) {
     if (!F.hasFnAttribute("hlsl.shader"))
       continue;
 
-    EntryProperties EFP(F);
+    EntryProperties EFP(&F);
     // Get "hlsl.shader" attribute
     Attribute EntryAttr = F.getFnAttribute("hlsl.shader");
     assert(EntryAttr.isValid() &&
@@ -66,6 +66,22 @@ static ModuleMetadataInfo collectMetadataInfo(Module &M) {
       Success = llvm::to_integer(NumThreadsVec[2], EFP.NumThreadsZ, 10);
       assert(Success && "Failed to parse Z component of numthreads");
     }
+    // Get wavesize attribute value, if one exists
+    StringRef WaveSizeStr =
+        F.getFnAttribute("hlsl.wavesize").getValueAsString();
+    if (!WaveSizeStr.empty()) {
+      SmallVector<StringRef> WaveSizeVec;
+      WaveSizeStr.split(WaveSizeVec, ',');
+      assert(WaveSizeVec.size() == 3 && "Invalid wavesize specified");
+      // Read in the three component values of numthreads
+      [[maybe_unused]] bool Success =
+          llvm::to_integer(WaveSizeVec[0], EFP.WaveSizeMin, 10);
+      assert(Success && "Failed to parse Min component of wavesize");
+      Success = llvm::to_integer(WaveSizeVec[1], EFP.WaveSizeMax, 10);
+      assert(Success && "Failed to parse Max component of wavesize");
+      Success = llvm::to_integer(WaveSizeVec[2], EFP.WaveSizePref, 10);
+      assert(Success && "Failed to parse Preferred component of wavesize");
+    }
     MMDAI.EntryPropertyVec.push_back(EFP);
   }
   return MMDAI;
@@ -74,8 +90,8 @@ static ModuleMetadataInfo collectMetadataInfo(Module &M) {
 void ModuleMetadataInfo::print(raw_ostream &OS) const {
   OS << "Shader Model Version : " << ShaderModelVersion.getAsString() << "\n";
   OS << "DXIL Version : " << DXILVersion.getAsString() << "\n";
-  OS << "Target Shader Stage : " << Triple::getEnvironmentTypeName(ShaderStage)
-     << "\n";
+  OS << "Target Shader Stage : "
+     << Triple::getEnvironmentTypeName(ShaderProfile) << "\n";
   OS << "Validator Version : " << ValidatorVersion.getAsString() << "\n";
   for (const auto &EP : EntryPropertyVec) {
     OS << " " << EP.Entry->getName() << "\n";
@@ -109,10 +125,7 @@ DXILMetadataAnalysisPrinterPass::run(Module &M, ModuleAnalysisManager &AM) {
 // DXILMetadataAnalysisWrapperPass
 
 DXILMetadataAnalysisWrapperPass::DXILMetadataAnalysisWrapperPass()
-    : ModulePass(ID) {
-  initializeDXILMetadataAnalysisWrapperPassPass(
-      *PassRegistry::getPassRegistry());
-}
+    : ModulePass(ID) {}
 
 DXILMetadataAnalysisWrapperPass::~DXILMetadataAnalysisWrapperPass() = default;
 

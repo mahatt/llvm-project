@@ -31,7 +31,26 @@ public:
     return m_object_instance_sp;
   }
 
-  virtual llvm::SmallVector<llvm::StringLiteral> GetAbstractMethods() const = 0;
+  struct AbstractMethodRequirement {
+    llvm::StringLiteral name;
+    size_t min_arg_count = 0;
+  };
+
+  virtual llvm::SmallVector<AbstractMethodRequirement>
+  GetAbstractMethodRequirements() const = 0;
+
+  virtual llvm::Expected<FileSpec> GetScriptedModulePath() {
+    return llvm::make_error<UnimplementedError>();
+  }
+
+  llvm::SmallVector<llvm::StringLiteral> const GetAbstractMethods() const {
+    llvm::SmallVector<llvm::StringLiteral> abstract_methods;
+    llvm::transform(GetAbstractMethodRequirements(), abstract_methods.begin(),
+                    [](const AbstractMethodRequirement &requirement) {
+                      return requirement.name;
+                    });
+    return abstract_methods;
+  }
 
   template <typename Ret>
   static Ret ErrorWithMessage(llvm::StringRef caller_name,

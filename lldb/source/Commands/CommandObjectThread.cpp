@@ -15,7 +15,6 @@
 #include "CommandObjectThreadUtil.h"
 #include "CommandObjectTrace.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/ValueObject.h"
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandOptionArgumentTable.h"
@@ -37,6 +36,7 @@
 #include "lldb/Target/Trace.h"
 #include "lldb/Target/TraceDumper.h"
 #include "lldb/Utility/State.h"
+#include "lldb/ValueObject/ValueObject.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -489,11 +489,11 @@ protected:
         AddressRange range;
         SymbolContext sc = frame->GetSymbolContext(eSymbolContextEverything);
         if (m_options.m_end_line != LLDB_INVALID_LINE_NUMBER) {
-          Status error;
-          if (!sc.GetAddressRangeFromHereToEndLine(m_options.m_end_line, range,
-                                                   error)) {
-            result.AppendErrorWithFormat("invalid end-line option: %s.",
-                                         error.AsCString());
+          llvm::Error err =
+              sc.GetAddressRangeFromHereToEndLine(m_options.m_end_line, range);
+          if (err) {
+            result.AppendErrorWithFormatv("invalid end-line option: {0}.",
+                                          llvm::toString(std::move(err)));
             return;
           }
         } else if (m_options.m_end_line_is_block_end) {
@@ -622,7 +622,7 @@ protected:
         result.SetStatus(eReturnStatusSuccessContinuingNoResult);
       }
     } else {
-      result.SetError(new_plan_status);
+      result.SetError(std::move(new_plan_status));
     }
   }
 
@@ -718,8 +718,7 @@ public:
               thread->SetResumeState(eStateSuspended);
             }
           }
-          result.AppendMessageWithFormat("in process %" PRIu64 "\n",
-                                         process->GetID());
+          result.AppendMessageWithFormatv("in process {0}", process->GetID());
         }
       } else {
         // These two lines appear at the beginning of both blocks in this
@@ -737,9 +736,9 @@ public:
         for (uint32_t idx = 0; idx < num_threads; ++idx) {
           Thread *thread = process->GetThreadList().GetThreadAtIndex(idx).get();
           if (thread == current_thread) {
-            result.AppendMessageWithFormat("Resuming thread 0x%4.4" PRIx64
-                                           " in process %" PRIu64 "\n",
-                                           thread->GetID(), process->GetID());
+            result.AppendMessageWithFormatv(
+                "Resuming thread {0:x4} in process {1}", thread->GetID(),
+                process->GetID());
             const bool override_suspend = true;
             thread->SetResumeState(eStateRunning, override_suspend);
           } else {
@@ -757,8 +756,8 @@ public:
 
       // We should not be holding the thread list lock when we do this.
       if (error.Success()) {
-        result.AppendMessageWithFormat("Process %" PRIu64 " resuming\n",
-                                       process->GetID());
+        result.AppendMessageWithFormatv("Process {0} resuming",
+                                        process->GetID());
         if (synchronous_execution) {
           // If any state changed events had anything to say, add that to the
           // result
@@ -857,7 +856,6 @@ public:
       return llvm::ArrayRef(g_thread_until_options);
     }
 
-    uint32_t m_step_thread_idx = LLDB_INVALID_THREAD_ID;
     bool m_stop_others = false;
     std::vector<lldb::addr_t> m_until_addrs;
 
@@ -959,7 +957,6 @@ protected:
         }
 
         LineEntry function_start;
-        uint32_t index_ptr = 0, end_ptr = UINT32_MAX;
         std::vector<addr_t> address_list;
 
         // Find the beginning & end index of the function, but first make
@@ -970,19 +967,14 @@ protected:
           return;
         }
 
-        AddressRange fun_addr_range = sc.function->GetAddressRange();
-        Address fun_start_addr = fun_addr_range.GetBaseAddress();
-        line_table->FindLineEntryByAddress(fun_start_addr, function_start,
-                                           &index_ptr);
+        RangeVector<uint32_t, uint32_t> line_idx_ranges;
+        for (const AddressRange &range : sc.function->GetAddressRanges()) {
+          auto [begin, end] = line_table->GetLineEntryIndexRange(range);
+          line_idx_ranges.Append(begin, end - begin);
+        }
+        line_idx_ranges.Sort();
 
-        Address fun_end_addr(fun_start_addr.GetSection(),
-                             fun_start_addr.GetOffset() +
-                                 fun_addr_range.GetByteSize());
-
-        bool all_in_function = true;
-
-        line_table->FindLineEntryByAddress(fun_end_addr, function_start,
-                                           &end_ptr);
+        bool found_something = false;
 
         // Since not all source lines will contribute code, check if we are
         // setting the breakpoint on the exact line number or the nearest
@@ -991,52 +983,50 @@ protected:
         for (uint32_t line_number : line_numbers) {
           LineEntry line_entry;
           bool exact = false;
-          uint32_t start_idx_ptr = index_ptr;
-          start_idx_ptr = sc.comp_unit->FindLineEntry(
-              index_ptr, line_number, nullptr, exact, &line_entry);
-          if (start_idx_ptr != UINT32_MAX)
-            line_number = line_entry.line;
-          exact = true;
-          start_idx_ptr = index_ptr;
-          while (start_idx_ptr <= end_ptr) {
-            start_idx_ptr = sc.comp_unit->FindLineEntry(
-                start_idx_ptr, line_number, nullptr, exact, &line_entry);
-            if (start_idx_ptr == UINT32_MAX)
-              break;
+          if (sc.comp_unit->FindLineEntry(0, line_number, nullptr, exact,
+                                          &line_entry) == UINT32_MAX)
+            continue;
 
-            addr_t address =
-                line_entry.range.GetBaseAddress().GetLoadAddress(target);
-            if (address != LLDB_INVALID_ADDRESS) {
-              if (fun_addr_range.ContainsLoadAddress(address, target))
+          found_something = true;
+          line_number = line_entry.line;
+          exact = true;
+          uint32_t end_func_idx = line_idx_ranges.GetMaxRangeEnd(0);
+          uint32_t idx = sc.comp_unit->FindLineEntry(
+              line_idx_ranges.GetMinRangeBase(UINT32_MAX), line_number, nullptr,
+              exact, &line_entry);
+          while (idx < end_func_idx) {
+            if (line_idx_ranges.FindEntryIndexThatContains(idx) != UINT32_MAX) {
+              addr_t address =
+                  line_entry.range.GetBaseAddress().GetLoadAddress(target);
+              if (address != LLDB_INVALID_ADDRESS)
                 address_list.push_back(address);
-              else
-                all_in_function = false;
             }
-            start_idx_ptr++;
+            idx = sc.comp_unit->FindLineEntry(idx + 1, line_number, nullptr,
+                                              exact, &line_entry);
           }
         }
 
         for (lldb::addr_t address : m_options.m_until_addrs) {
-          if (fun_addr_range.ContainsLoadAddress(address, target))
+          AddressRange unused;
+          if (sc.function->GetRangeContainingLoadAddress(address, *target,
+                                                         unused))
             address_list.push_back(address);
-          else
-            all_in_function = false;
         }
 
         if (address_list.empty()) {
-          if (all_in_function)
-            result.AppendErrorWithFormat(
-                "No line entries matching until target.\n");
-          else
+          if (found_something)
             result.AppendErrorWithFormat(
                 "Until target outside of the current function.\n");
+          else
+            result.AppendErrorWithFormat(
+                "No line entries matching until target.\n");
 
           return;
         }
 
         new_plan_sp = thread->QueueThreadPlanForStepUntil(
-            abort_other_plans, &address_list.front(), address_list.size(),
-            m_options.m_stop_others, m_options.m_frame_idx, new_plan_status);
+            abort_other_plans, address_list, m_options.m_stop_others,
+            m_options.m_frame_idx, new_plan_status);
         if (new_plan_sp) {
           // User level plans should be controlling plans so they can be
           // interrupted
@@ -1046,7 +1036,7 @@ protected:
           new_plan_sp->SetIsControllingPlan(true);
           new_plan_sp->SetOkayToDiscard(false);
         } else {
-          result.SetError(new_plan_status);
+          result.SetError(std::move(new_plan_status));
           return;
         }
       } else {
@@ -1071,8 +1061,8 @@ protected:
         error = process->Resume();
 
       if (error.Success()) {
-        result.AppendMessageWithFormat("Process %" PRIu64 " resuming\n",
-                                       process->GetID());
+        result.AppendMessageWithFormatv("Process {0} resuming",
+                                        process->GetID());
         if (synchronous_execution) {
           // If any state changed events had anything to say, add that to the
           // result
@@ -1278,6 +1268,7 @@ public:
     void OptionParsingStarting(ExecutionContext *execution_context) override {
       m_json_thread = false;
       m_json_stopinfo = false;
+      m_backing_thread = false;
     }
 
     Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
@@ -1294,6 +1285,10 @@ public:
         m_json_stopinfo = true;
         break;
 
+      case 'b':
+        m_backing_thread = true;
+        break;
+
       default:
         llvm_unreachable("Unimplemented option");
       }
@@ -1306,6 +1301,7 @@ public:
 
     bool m_json_thread;
     bool m_json_stopinfo;
+    bool m_backing_thread;
   };
 
   CommandObjectThreadInfo(CommandInterpreter &interpreter)
@@ -1342,6 +1338,8 @@ public:
     }
 
     Thread *thread = thread_sp.get();
+    if (m_options.m_backing_thread && thread->GetBackingThread())
+      thread = thread->GetBackingThread().get();
 
     Stream &strm = result.GetOutputStream();
     if (!thread->GetDescription(strm, eDescriptionLevelFull,
@@ -1570,7 +1568,7 @@ protected:
     uint32_t frame_idx = frame_sp->GetFrameIndex();
 
     if (frame_sp->IsInlined()) {
-      result.AppendError("Don't know how to return from inlined frames.");
+      result.AppendError("don't know how to return from inlined frames");
       return;
     }
 
@@ -1649,11 +1647,14 @@ public:
           return Status::FromErrorStringWithFormat("invalid line number: '%s'.",
                                                    option_arg.str().c_str());
         break;
-      case 'b':
+      case 'b': {
+        option_arg.consume_front("+");
+
         if (option_arg.getAsInteger(0, m_line_offset))
           return Status::FromErrorStringWithFormat("invalid line offset: '%s'.",
                                                    option_arg.str().c_str());
         break;
+      }
       case 'a':
         m_load_addr = OptionArgParser::ToAddress(execution_context, option_arg,
                                                  LLDB_INVALID_ADDRESS, &error);
@@ -1734,7 +1735,7 @@ protected:
       Status err = thread->JumpToLine(file, line, m_options.m_force, &warnings);
 
       if (err.Fail()) {
-        result.SetError(err);
+        result.SetError(std::move(err));
         return;
       }
 
@@ -2028,15 +2029,10 @@ public:
             "process to different formats.",
             "thread trace export <export-plugin> [<subcommand objects>]") {
 
-    unsigned i = 0;
-    for (llvm::StringRef plugin_name =
-             PluginManager::GetTraceExporterPluginNameAtIndex(i);
-         !plugin_name.empty();
-         plugin_name = PluginManager::GetTraceExporterPluginNameAtIndex(i++)) {
-      if (ThreadTraceExportCommandCreator command_creator =
-              PluginManager::GetThreadTraceExportCommandCreatorAtIndex(i)) {
-        LoadSubCommand(plugin_name, command_creator(interpreter));
-      }
+    for (auto &cbs : PluginManager::GetTraceExporterCallbacks()) {
+      if (cbs.create_thread_trace_export_command)
+        LoadSubCommand(cbs.name,
+                       cbs.create_thread_trace_export_command(interpreter));
     }
   }
 };

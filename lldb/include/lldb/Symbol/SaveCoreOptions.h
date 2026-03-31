@@ -6,22 +6,25 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_SOURCE_PLUGINS_OBJECTFILE_SaveCoreOPTIONS_H
-#define LLDB_SOURCE_PLUGINS_OBJECTFILE_SaveCoreOPTIONS_H
+#ifndef LLDB_SYMBOL_SAVECOREOPTIONS_H
+#define LLDB_SYMBOL_SAVECOREOPTIONS_H
 
+#include "lldb/Target/CoreFileMemoryRanges.h"
+#include "lldb/Target/ThreadCollection.h"
 #include "lldb/Utility/FileSpec.h"
-#include "lldb/lldb-forward.h"
-#include "lldb/lldb-types.h"
+#include "lldb/Utility/RangeMap.h"
 
 #include <optional>
 #include <string>
 #include <unordered_set>
 
+using MemoryRanges = lldb_private::RangeVector<lldb::addr_t, lldb::addr_t>;
+
 namespace lldb_private {
 
 class SaveCoreOptions {
 public:
-  SaveCoreOptions(){};
+  SaveCoreOptions() = default;
   ~SaveCoreOptions() = default;
 
   lldb_private::Status SetPluginName(const char *name);
@@ -34,12 +37,22 @@ public:
   const std::optional<lldb_private::FileSpec> GetOutputFile() const;
 
   Status SetProcess(lldb::ProcessSP process_sp);
+  lldb::ProcessSP GetProcess() const { return m_process_sp; }
 
   Status AddThread(lldb::ThreadSP thread_sp);
   bool RemoveThread(lldb::ThreadSP thread_sp);
   bool ShouldThreadBeSaved(lldb::tid_t tid) const;
+  bool HasSpecifiedThreads() const;
 
-  Status EnsureValidConfiguration(lldb::ProcessSP process_sp) const;
+  Status EnsureValidConfiguration() const;
+  const MemoryRanges &GetCoreFileMemoryRanges() const;
+
+  void AddMemoryRegionToSave(const lldb_private::MemoryRegionInfo &region);
+
+  llvm::Expected<lldb_private::CoreFileMemoryRanges> GetMemoryRegionsToSave();
+  lldb_private::ThreadCollection::collection GetThreadsToSave() const;
+
+  llvm::Expected<uint64_t> GetCurrentSizeInBytes();
 
   void Clear();
 
@@ -51,7 +64,8 @@ private:
   std::optional<lldb::SaveCoreStyle> m_style;
   lldb::ProcessSP m_process_sp;
   std::unordered_set<lldb::tid_t> m_threads_to_save;
+  MemoryRanges m_regions_to_save;
 };
 } // namespace lldb_private
 
-#endif // LLDB_SOURCE_PLUGINS_OBJECTFILE_SAVECOREOPTIONS_H
+#endif // LLDB_SYMBOL_SAVECOREOPTIONS_H

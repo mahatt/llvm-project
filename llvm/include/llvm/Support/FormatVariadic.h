@@ -30,13 +30,13 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/FormatCommon.h"
 #include "llvm/Support/FormatProviders.h"
 #include "llvm/Support/FormatVariadicDetails.h"
 #include "llvm/Support/raw_ostream.h"
 #include <array>
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -97,21 +97,18 @@ public:
   }
 
   // Parse and optionally validate format string (in debug builds).
-  static SmallVector<ReplacementItem, 2>
+  LLVM_ABI static SmallVector<ReplacementItem, 2>
   parseFormatString(StringRef Fmt, size_t NumArgs, bool Validate);
 
   std::string str() const {
     std::string Result;
-    raw_string_ostream Stream(Result);
-    Stream << *this;
-    Stream.flush();
+    raw_string_ostream(Result) << *this;
     return Result;
   }
 
   template <unsigned N> SmallString<N> sstr() const {
     SmallString<N> Result;
-    raw_svector_ostream Stream(Result);
-    Stream << *this;
+    raw_svector_ostream(Result) << *this;
     return Result;
   }
 
@@ -167,7 +164,7 @@ public:
 // Formats textual output.  `Fmt` is a string consisting of one or more
 // replacement sequences with the following grammar:
 //
-// rep_field ::= "{" index ["," layout] [":" format] "}"
+// rep_field ::= "{" [index] ["," layout] [":" format] "}"
 // index     ::= <non-negative integer>
 // layout    ::= [[[char]loc]width]
 // format    ::= <any string not containing "{" or "}">
@@ -175,8 +172,12 @@ public:
 // loc       ::= "-" | "=" | "+"
 // width     ::= <positive integer>
 //
-// index   - A non-negative integer specifying the index of the item in the
-//           parameter pack to print.  Any other value is invalid.
+// index   - An optional non-negative integer specifying the index of the item
+//           in the parameter pack to print. Any other value is invalid. If its
+//           not specified, it will be automatically assigned a value based on
+//           the order of rep_field seen in the format string. Note that mixing
+//           automatic and explicit index in the same call is an error and will
+//           fail validation in assert-enabled builds.
 // layout  - A string controlling how the field is laid out within the available
 //           space.
 // format  - A type-dependent string used to provide additional options to

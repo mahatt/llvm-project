@@ -29,20 +29,21 @@
 
 // Only use SANITIZER_*ATTRIBUTE* before the function return type!
 #if SANITIZER_WINDOWS
-#if SANITIZER_IMPORT_INTERFACE
-# define SANITIZER_INTERFACE_ATTRIBUTE __declspec(dllimport)
-#else
-# define SANITIZER_INTERFACE_ATTRIBUTE __declspec(dllexport)
-#endif
-# define SANITIZER_WEAK_ATTRIBUTE
-#  define SANITIZER_WEAK_IMPORT
-#elif SANITIZER_GO
-# define SANITIZER_INTERFACE_ATTRIBUTE
-# define SANITIZER_WEAK_ATTRIBUTE
+#  if SANITIZER_IMPORT_INTERFACE
+#    define SANITIZER_INTERFACE_ATTRIBUTE __declspec(dllimport)
+#  else
+#    define SANITIZER_INTERFACE_ATTRIBUTE __declspec(dllexport)
+#  endif
+#  define SANITIZER_WEAK_ATTRIBUTE
 #  define SANITIZER_WEAK_IMPORT
 #else
-# define SANITIZER_INTERFACE_ATTRIBUTE __attribute__((visibility("default")))
-# define SANITIZER_WEAK_ATTRIBUTE  __attribute__((weak))
+#  if SANITIZER_GO
+#    define SANITIZER_INTERFACE_ATTRIBUTE
+#    define SANITIZER_WEAK_ATTRIBUTE
+#  else
+#    define SANITIZER_INTERFACE_ATTRIBUTE __attribute__((visibility("default")))
+#    define SANITIZER_WEAK_ATTRIBUTE __attribute__((weak))
+#  endif  // SANITIZER_GO
 #  if SANITIZER_APPLE
 #    define SANITIZER_WEAK_IMPORT extern "C" __attribute((weak_import))
 #  else
@@ -139,8 +140,14 @@
 namespace __sanitizer {
 
 #if defined(__UINTPTR_TYPE__)
+#  if defined(__arm__) && defined(__linux__)
+// Linux Arm headers redefine __UINTPTR_TYPE__ and disagree with clang/gcc.
+typedef unsigned int uptr;
+typedef int sptr;
+#  else
 typedef __UINTPTR_TYPE__ uptr;
 typedef __INTPTR_TYPE__ sptr;
+#  endif
 #elif defined(_WIN64)
 // 64-bit Windows uses LLP64 data model.
 typedef unsigned long long uptr;
@@ -197,7 +204,13 @@ typedef __SIZE_TYPE__ usize;
 typedef uptr usize;
 #endif
 
-typedef u64 tid_t;
+#if defined(__s390__) && !defined(__s390x__)
+typedef long ssize;
+#else
+typedef sptr ssize;
+#endif
+
+typedef u64 ThreadID;
 
 // ----------- ATTENTION -------------
 // This header should NOT include any other headers to avoid portability issues.

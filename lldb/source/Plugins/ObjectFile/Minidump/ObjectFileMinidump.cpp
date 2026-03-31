@@ -35,7 +35,7 @@ void ObjectFileMinidump::Terminate() {
 }
 
 ObjectFile *ObjectFileMinidump::CreateInstance(
-    const lldb::ModuleSP &module_sp, lldb::DataBufferSP data_sp,
+    const lldb::ModuleSP &module_sp, lldb::DataExtractorSP extractor_sp,
     lldb::offset_t data_offset, const lldb_private::FileSpec *file,
     lldb::offset_t offset, lldb::offset_t length) {
   return nullptr;
@@ -47,13 +47,26 @@ ObjectFile *ObjectFileMinidump::CreateMemoryInstance(
   return nullptr;
 }
 
-size_t ObjectFileMinidump::GetModuleSpecifications(
-    const lldb_private::FileSpec &file, lldb::DataBufferSP &data_sp,
-    lldb::offset_t data_offset, lldb::offset_t file_offset,
-    lldb::offset_t length, lldb_private::ModuleSpecList &specs) {
-  specs.Clear();
-  return 0;
+ModuleSpecList ObjectFileMinidump::GetModuleSpecifications(
+    const lldb_private::FileSpec &file, lldb::DataExtractorSP &extractor_sp,
+    lldb::offset_t file_offset, lldb::offset_t length) {
+  return {};
 }
+
+struct DumpFailRemoveHolder {
+  DumpFailRemoveHolder(MinidumpFileBuilder &builder) : m_builder(builder) {}
+
+  ~DumpFailRemoveHolder() {
+    if (!m_success)
+      m_builder.DeleteFile();
+  }
+
+  void SetSuccess() { m_success = true; }
+
+private:
+  MinidumpFileBuilder &m_builder;
+  bool m_success = false;
+};
 
 bool ObjectFileMinidump::SaveCore(const lldb::ProcessSP &process_sp,
                                   lldb_private::SaveCoreOptions &options,
@@ -75,6 +88,7 @@ bool ObjectFileMinidump::SaveCore(const lldb::ProcessSP &process_sp,
   }
   MinidumpFileBuilder builder(std::move(maybe_core_file.get()), process_sp,
                               options);
+  DumpFailRemoveHolder request(builder);
 
   Log *log = GetLog(LLDBLog::Object);
   error = builder.AddHeaderAndCalculateDirectories();
@@ -132,6 +146,8 @@ bool ObjectFileMinidump::SaveCore(const lldb::ProcessSP &process_sp,
     LLDB_LOGF(log, "DumpFile failed: %s", error.AsCString());
     return false;
   }
+
+  request.SetSuccess();
 
   return true;
 }

@@ -38,6 +38,8 @@ try:
 except ImportError:
     if not tags.has("builder-man"):
         raise
+else:
+    myst_enable_extensions = ["substitution"]
 
 # Automatic anchors for markdown titles
 myst_heading_anchors = 6
@@ -271,7 +273,8 @@ def process_rst(name):
 
         if len(header) != len(title):
             print(
-                "error: invalid header in %r (does not match title)" % file_subpath,
+                "error: invalid header length in %r (does not match length of title)"
+                % file_subpath,
                 file=sys.stderr,
             )
         if " - " not in title:

@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/SandboxIR/Type.h"
-#include "llvm/SandboxIR/SandboxIR.h"
+#include "llvm/SandboxIR/Context.h"
 
 using namespace llvm::sandboxir;
 
@@ -15,20 +15,20 @@ Type *Type::getScalarType() const {
   return Ctx.getType(LLVMTy->getScalarType());
 }
 
-Type *Type::getInt64Ty(Context &Ctx) {
-  return Ctx.getType(llvm::Type::getInt64Ty(Ctx.LLVMCtx));
+IntegerType *Type::getInt64Ty(Context &Ctx) {
+  return cast<IntegerType>(Ctx.getType(llvm::Type::getInt64Ty(Ctx.LLVMCtx)));
 }
-Type *Type::getInt32Ty(Context &Ctx) {
-  return Ctx.getType(llvm::Type::getInt32Ty(Ctx.LLVMCtx));
+IntegerType *Type::getInt32Ty(Context &Ctx) {
+  return cast<IntegerType>(Ctx.getType(llvm::Type::getInt32Ty(Ctx.LLVMCtx)));
 }
-Type *Type::getInt16Ty(Context &Ctx) {
-  return Ctx.getType(llvm::Type::getInt16Ty(Ctx.LLVMCtx));
+IntegerType *Type::getInt16Ty(Context &Ctx) {
+  return cast<IntegerType>(Ctx.getType(llvm::Type::getInt16Ty(Ctx.LLVMCtx)));
 }
-Type *Type::getInt8Ty(Context &Ctx) {
-  return Ctx.getType(llvm::Type::getInt8Ty(Ctx.LLVMCtx));
+IntegerType *Type::getInt8Ty(Context &Ctx) {
+  return cast<IntegerType>(Ctx.getType(llvm::Type::getInt8Ty(Ctx.LLVMCtx)));
 }
-Type *Type::getInt1Ty(Context &Ctx) {
-  return Ctx.getType(llvm::Type::getInt1Ty(Ctx.LLVMCtx));
+IntegerType *Type::getInt1Ty(Context &Ctx) {
+  return cast<IntegerType>(Ctx.getType(llvm::Type::getInt1Ty(Ctx.LLVMCtx)));
 }
 Type *Type::getDoubleTy(Context &Ctx) {
   return Ctx.getType(llvm::Type::getDoubleTy(Ctx.LLVMCtx));
@@ -36,11 +36,17 @@ Type *Type::getDoubleTy(Context &Ctx) {
 Type *Type::getFloatTy(Context &Ctx) {
   return Ctx.getType(llvm::Type::getFloatTy(Ctx.LLVMCtx));
 }
-
-PointerType *PointerType::get(Type *ElementType, unsigned AddressSpace) {
-  return cast<PointerType>(ElementType->getContext().getType(
-      llvm::PointerType::get(ElementType->LLVMTy, AddressSpace)));
+Type *Type::getHalfTy(Context &Ctx) {
+  return Ctx.getType(llvm::Type::getHalfTy(Ctx.LLVMCtx));
 }
+
+#ifndef NDEBUG
+void Type::dumpOS(raw_ostream &OS) { LLVMTy->print(OS); }
+void Type::dump() {
+  dumpOS(dbgs());
+  dbgs() << "\n";
+}
+#endif
 
 PointerType *PointerType::get(Context &Ctx, unsigned AddressSpace) {
   return cast<PointerType>(
@@ -65,6 +71,54 @@ StructType *StructType::get(Context &Ctx, ArrayRef<Type *> Elements,
 VectorType *VectorType::get(Type *ElementType, ElementCount EC) {
   return cast<VectorType>(ElementType->getContext().getType(
       llvm::VectorType::get(ElementType->LLVMTy, EC)));
+}
+
+Type *VectorType::getElementType() const {
+  return Ctx.getType(cast<llvm::VectorType>(LLVMTy)->getElementType());
+}
+VectorType *VectorType::getInteger(VectorType *VTy) {
+  return cast<VectorType>(VTy->getContext().getType(
+      llvm::VectorType::getInteger(cast<llvm::VectorType>(VTy->LLVMTy))));
+}
+VectorType *VectorType::getExtendedElementVectorType(VectorType *VTy) {
+  return cast<VectorType>(
+      VTy->getContext().getType(llvm::VectorType::getExtendedElementVectorType(
+          cast<llvm::VectorType>(VTy->LLVMTy))));
+}
+VectorType *VectorType::getTruncatedElementVectorType(VectorType *VTy) {
+  return cast<VectorType>(
+      VTy->getContext().getType(llvm::VectorType::getTruncatedElementVectorType(
+          cast<llvm::VectorType>(VTy->LLVMTy))));
+}
+VectorType *VectorType::getSubdividedVectorType(VectorType *VTy,
+                                                int NumSubdivs) {
+  return cast<VectorType>(
+      VTy->getContext().getType(llvm::VectorType::getSubdividedVectorType(
+          cast<llvm::VectorType>(VTy->LLVMTy), NumSubdivs)));
+}
+VectorType *VectorType::getHalfElementsVectorType(VectorType *VTy) {
+  return cast<VectorType>(
+      VTy->getContext().getType(llvm::VectorType::getHalfElementsVectorType(
+          cast<llvm::VectorType>(VTy->LLVMTy))));
+}
+VectorType *VectorType::getDoubleElementsVectorType(VectorType *VTy) {
+  return cast<VectorType>(
+      VTy->getContext().getType(llvm::VectorType::getDoubleElementsVectorType(
+          cast<llvm::VectorType>(VTy->LLVMTy))));
+}
+bool VectorType::isValidElementType(Type *ElemTy) {
+  return llvm::VectorType::isValidElementType(ElemTy->LLVMTy);
+}
+
+FixedVectorType *FixedVectorType::get(Type *ElementType, unsigned NumElts) {
+  return cast<FixedVectorType>(ElementType->getContext().getType(
+      llvm::FixedVectorType::get(ElementType->LLVMTy, NumElts)));
+}
+
+ScalableVectorType *ScalableVectorType::get(Type *ElementType,
+                                            unsigned NumElts) {
+  return cast<ScalableVectorType>(ElementType->getContext().getType(
+      llvm::ScalableVectorType::get(ElementType->LLVMTy, NumElts)));
 }
 
 IntegerType *IntegerType::get(Context &Ctx, unsigned NumBits) {

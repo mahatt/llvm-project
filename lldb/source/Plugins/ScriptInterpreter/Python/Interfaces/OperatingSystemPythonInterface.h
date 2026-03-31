@@ -6,13 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_PLUGINS_SCRIPTINTERPRETER_PYTHON_INTERFACES_OPERATINGSYSTEMPYTHONINTERFACE_H
-#define LLDB_PLUGINS_SCRIPTINTERPRETER_PYTHON_INTERFACES_OPERATINGSYSTEMPYTHONINTERFACE_H
+#ifndef LLDB_SOURCE_PLUGINS_SCRIPTINTERPRETER_PYTHON_INTERFACES_OPERATINGSYSTEMPYTHONINTERFACE_H
+#define LLDB_SOURCE_PLUGINS_SCRIPTINTERPRETER_PYTHON_INTERFACES_OPERATINGSYSTEMPYTHONINTERFACE_H
 
-#include "lldb/Host/Config.h"
 #include "lldb/Interpreter/Interfaces/OperatingSystemInterface.h"
-
-#if LLDB_ENABLE_PYTHON
 
 #include "ScriptedThreadPythonInterface.h"
 
@@ -31,8 +28,9 @@ public:
                      StructuredData::DictionarySP args_sp,
                      StructuredData::Generic *script_obj = nullptr) override;
 
-  llvm::SmallVector<llvm::StringLiteral> GetAbstractMethods() const override {
-    return llvm::SmallVector<llvm::StringLiteral>({"get_thread_info"});
+  llvm::SmallVector<AbstractMethodRequirement>
+  GetAbstractMethodRequirements() const override {
+    return llvm::SmallVector<AbstractMethodRequirement>({{"get_thread_info"}});
   }
 
   StructuredData::DictionarySP CreateThread(lldb::tid_t tid,
@@ -43,6 +41,8 @@ public:
   StructuredData::DictionarySP GetRegisterInfo() override;
 
   std::optional<std::string> GetRegisterContextForTID(lldb::tid_t tid) override;
+
+  std::optional<bool> DoesPluginReportAllThreads() override;
 
   static void Initialize();
 
@@ -56,5 +56,4 @@ public:
 };
 } // namespace lldb_private
 
-#endif // LLDB_ENABLE_PYTHON
-#endif // LLDB_PLUGINS_SCRIPTINTERPRETER_PYTHON_INTERFACES_OPERATINGSYSTEMPYTHONINTERFACE_H
+#endif // LLDB_SOURCE_PLUGINS_SCRIPTINTERPRETER_PYTHON_INTERFACES_OPERATINGSYSTEMPYTHONINTERFACE_H

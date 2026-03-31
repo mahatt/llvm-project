@@ -10,13 +10,12 @@
 #define LLVM_LIBC_SRC_STDIO_ASPRINTF_H
 
 #include "src/__support/macros/config.h"
-#include <stdarg.h>
-#include <stdio.h>
 
-namespace LIBC_NAMESPACE {
+namespace LIBC_NAMESPACE_DECL {
 
-int asprintf(char **__restrict s, const char *format, ...);
+int asprintf(char **__restrict s, const char *__restrict format, ...);
+int __asprintf_modular(char **__restrict s, const char *__restrict format, ...);
 
-} // namespace LIBC_NAMESPACE
+} // namespace LIBC_NAMESPACE_DECL
 
 #endif // LLVM_LIBC_SRC_STDIO_ASPRINTF_H
